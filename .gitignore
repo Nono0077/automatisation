@@ -1,0 +1,10 @@
+.env
+output/
+photos/
+fonts/
+__pycache__/
+*.pyc
+*.pyo
+config.json
+_runner.py
+*.backup
