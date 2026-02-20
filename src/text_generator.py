@@ -316,15 +316,15 @@ def generate_text(config_path: str):
 
     # Vérifier si le contenu existe déjà
     if os.path.exists(output_path):
-        print(f"  ℹ️  book_content.json existe déjà, régénération...")
+        print(f"  [info]  book_content.json existe déjà, régénération...")
         import shutil
         backup = output_path + ".bak"
         shutil.copy2(output_path, backup)
 
     user_prompt = _build_user_prompt(config)
 
-    print("  📡 Appel à Claude (claude-sonnet-4-20250514)...")
-    print("  ⏳ Cela peut prendre 30-60 secondes...")
+    print("  [api] Appel à Claude (claude-sonnet-4-20250514)...")
+    print("  [...] Cela peut prendre 30-60 secondes...")
 
     client = anthropic.Anthropic()
     start = time.time()
@@ -339,28 +339,28 @@ def generate_text(config_path: str):
     elapsed = time.time() - start
     raw_text = message.content[0].text
 
-    print(f"  ✓ Réponse reçue en {elapsed:.1f}s ({len(raw_text)} caractères)")
+    print(f"  [ok] Réponse reçue en {elapsed:.1f}s ({len(raw_text)} caractères)")
 
     # Parser le JSON
     try:
         content = _extract_json(raw_text)
     except (json.JSONDecodeError, ValueError) as e:
-        print(f"  ❌ Erreur de parsing JSON : {e}")
+        print(f"  [err] Erreur de parsing JSON : {e}")
         # Sauvegarder la réponse brute pour debug
         raw_path = os.path.join(OUTPUT_TEXT_DIR, "raw_response.txt")
         with open(raw_path, "w", encoding="utf-8") as f:
             f.write(raw_text)
-        print(f"  💾 Réponse brute sauvegardée : {raw_path}")
+        print(f"  [save] Réponse brute sauvegardée : {raw_path}")
         raise
 
     # Valider
     errors = _validate_content(content)
     if errors:
-        print(f"  ⚠️  Avertissements de validation :")
+        print(f"  [warn]  Avertissements de validation :")
         for err in errors:
             print(f"    - {err}")
     else:
-        print("  ✓ Validation OK — toutes les pages sont présentes")
+        print("  [ok] Validation OK — toutes les pages sont présentes")
 
     # Sauvegarder
     with open(output_path, "w", encoding="utf-8") as f:
@@ -375,7 +375,7 @@ def generate_text(config_path: str):
         if p.get("type") in ("image", "image_and_text")
     )
 
-    print(f"\n  📖 Titre : {title}")
-    print(f"  📄 Pages : {num_pages}")
-    print(f"  🎨 Prompts image : {num_images}")
-    print(f"  💾 Sauvegardé : {output_path}")
+    print(f"\n  [livre] Titre : {title}")
+    print(f"  [page] Pages : {num_pages}")
+    print(f"  [img] Prompts image : {num_images}")
+    print(f"  [save] Sauvegardé : {output_path}")

@@ -58,7 +58,7 @@ def _register_fonts():
                 pdfmetrics.registerFont(TTFont(font_name, path))
                 registered[font_name] = True
             except Exception as e:
-                print(f"  ⚠️  Impossible de charger {filename}: {e}")
+                print(f"  [warn] Impossible de charger {filename}: {e}")
                 registered[font_name] = False
         else:
             registered[font_name] = False
@@ -336,7 +336,7 @@ def build_pdf(config_path: str):
     registered = _register_fonts()
     age = config["child"]["age"]
     font_name, font_size = _get_font_for_age(age, registered)
-    print(f"  🔤 Police : {font_name} {font_size}pt (âge {age} ans)")
+    print(f"  [police] {font_name} {font_size}pt (age {age} ans)")
 
     # Couleur de fond
     palette = content.get("color_palette", {})
@@ -374,11 +374,11 @@ def build_pdf(config_path: str):
 
         if page_data["type"] == "image":
             img_path = os.path.join(IMAGES_DIR, f"page_{page_num:02d}.png")
-            print(f"  📄 Page {page_num} (illustration)...")
+            print(f"  [page] {page_num} (illustration)...")
             _draw_image_page(c, img_path)
 
         elif page_data["type"] == "text":
-            print(f"  📄 Page {page_num} (texte)...")
+            print(f"  [page] {page_num} (texte)...")
             _draw_text_page(c, page_data.get("text", ""), font_name, font_size, bg_color)
 
         c.showPage()
@@ -401,5 +401,5 @@ def build_pdf(config_path: str):
 
     # Sauvegarder
     c.save()
-    print(f"\n  ✅ PDF généré : {pdf_path}")
-    print(f"  📏 Format : 21cm × 21cm")
+    print(f"\n  [ok] PDF genere : {pdf_path}")
+    print(f"  [ok] Format : 21cm x 21cm")

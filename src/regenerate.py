@@ -9,7 +9,9 @@ from src.image_generator import (
     IMAGES_DIR,
     PROJECT_DIR,
     TEXT_DIR,
-    _get_reference_images,
+    _build_character_brief,
+    _get_photo_references,
+    _load_or_create_character_descriptions,
     _load_prompts_log,
     _page_to_filename,
     _save_prompts_log,
@@ -58,14 +60,13 @@ def regenerate_image(
 
     content_path = os.path.join(TEXT_DIR, "book_content.json")
     if not os.path.exists(content_path):
-        print("  ❌ book_content.json introuvable.")
+        print("  [err] book_content.json introuvable.")
         return
 
     with open(content_path, "r", encoding="utf-8") as f:
         content = json.load(f)
 
     # Trouver la page
-    # Convertir en int si c'est un numéro
     try:
         page_key = int(page_id)
     except ValueError:
@@ -78,45 +79,50 @@ def regenerate_image(
             break
 
     if not page_data:
-        print(f"  ❌ Page '{page_id}' introuvable dans book_content.json")
+        print(f"  [err] Page '{page_id}' introuvable dans book_content.json")
         return
 
     if page_data.get("type") not in ("image", "image_and_text"):
-        print(f"  ❌ La page {page_id} n'est pas une page d'illustration")
+        print(f"  [err] La page {page_id} n'est pas une page d'illustration")
         return
 
     prompt = page_data["image_prompt"]
 
     # Modifier le prompt si demandé
     if edit_prompt:
-        print(f"\n  📝 Prompt actuel pour la page {page_id} :")
-        print(f"  {'─' * 40}")
+        print(f"\n  Prompt actuel pour la page {page_id} :")
+        print(f"  {'-' * 40}")
         print(f"  {prompt[:500]}...")
-        print(f"  {'─' * 40}")
+        print(f"  {'-' * 40}")
         print("\n  Entrez les modifications (ou le nouveau prompt complet) :")
         new_prompt = input("  > ").strip()
         if new_prompt:
             prompt = new_prompt
-            print("  ✓ Prompt mis à jour")
+            print("  [ok] Prompt mis a jour")
+
+    # Charger photos de référence et descriptions texte
+    print("  [vision] Chargement des references personnages...")
+    photo_refs = _get_photo_references(config)
+    character_descriptions = _load_or_create_character_descriptions(config)
+    character_brief = _build_character_brief(character_descriptions, config)
+    enriched_prompt = character_brief + prompt if character_brief else prompt
 
     # Backup
     backup_path = _backup_image(page_key)
     if backup_path:
-        print(f"  💾 Backup : {os.path.basename(backup_path)}")
+        print(f"  [backup] {os.path.basename(backup_path)}")
 
     # Régénérer
     filename = _page_to_filename(page_key)
     filepath = os.path.join(IMAGES_DIR, filename)
-    cover_front_path = os.path.join(IMAGES_DIR, "cover_front.png")
-    ref_images = _get_reference_images(config, page_key, cover_front_path)
 
-    print(f"  🎨 Régénération de {page_id}...", end=" ", flush=True)
+    print(f"  [img] Regeneration de {page_id}...", end=" ", flush=True)
     start = time.time()
 
     success = generate_single_image(
-        prompt=prompt,
+        prompt=enriched_prompt,
         output_path=filepath,
-        reference_images=ref_images,
+        reference_images=photo_refs if photo_refs else None,
     )
 
     elapsed = time.time() - start
@@ -125,7 +131,8 @@ def regenerate_image(
     prompts_log = _load_prompts_log()
     prompts_log.append({
         "page": str(page_key),
-        "prompt": prompt,
+        "prompt": enriched_prompt,
+        "original_prompt": prompt,
         "success": success,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "duration_s": round(elapsed, 1),
@@ -134,21 +141,21 @@ def regenerate_image(
     _save_prompts_log(prompts_log)
 
     if success:
-        print(f"✓ ({elapsed:.1f}s)")
-        print(f"  ✅ Page {page_id} régénérée. Lancez --step pdf pour réassembler le livre.")
+        print(f"[ok] ({elapsed:.1f}s)")
+        print(f"  [ok] Page {page_id} regeneree. Lancez --step pdf pour reassembler le livre.")
     else:
-        print(f"✗ ({elapsed:.1f}s)")
-        print(f"  ❌ Échec de la régénération")
+        print(f"[err] ({elapsed:.1f}s)")
+        print(f"  [err] Echec de la regeneration")
         # Restaurer le backup
         if backup_path and os.path.exists(backup_path):
             shutil.copy2(backup_path, filepath)
-            print("  🔄 Image précédente restaurée")
+            print("  [restore] Image precedente restauree")
         return
 
     # Mode cascade (couverture)
     if cascade and str(page_key) == "cover_front":
-        print("\n  ⚠️  La couverture a changé.")
-        resp = input("  Régénérer les 15 autres images avec ce nouveau style ? (o/n) : ").strip().lower()
+        print("\n  [info] La couverture a change.")
+        resp = input("  Regenerer les autres images avec ce nouveau style ? (o/n) : ").strip().lower()
         if resp in ("o", "oui", "y", "yes"):
             # Collecter les autres pages image
             other_pages = []
@@ -166,7 +173,7 @@ def regenerate_image(
 
             other_pages.sort(key=sort_key)
 
-            print(f"\n  🔄 Régénération cascade : {len(other_pages)} images...")
+            print(f"\n  [img] Regeneration cascade : {len(other_pages)} images...")
             for idx, p in enumerate(other_pages, 1):
                 pid = p["page"]
                 fname = _page_to_filename(pid)
@@ -175,21 +182,22 @@ def regenerate_image(
                 # Backup
                 _backup_image(pid)
 
-                ref = _get_reference_images(config, pid, cover_front_path)
+                page_prompt = p["image_prompt"]
+                enriched = character_brief + page_prompt if character_brief else page_prompt
 
                 print(f"  [{idx}/{len(other_pages)}] {pid}...", end=" ", flush=True)
                 s = time.time()
 
                 ok = generate_single_image(
-                    prompt=p["image_prompt"],
+                    prompt=enriched,
                     output_path=fpath,
-                    reference_images=ref,
+                    reference_images=photo_refs if photo_refs else None,
                 )
 
                 el = time.time() - s
-                print(f"{'✓' if ok else '✗'} ({el:.1f}s)")
+                print(f"[{'ok' if ok else 'err'}] ({el:.1f}s)")
 
                 if idx < len(other_pages):
                     time.sleep(PAUSE_BETWEEN_CALLS)
 
-            print(f"\n  ✅ Cascade terminée. Lancez --step pdf pour réassembler.")
+            print(f"\n  [ok] Cascade terminee. Lancez --step pdf pour reassembler.")

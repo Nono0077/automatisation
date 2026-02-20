@@ -12,7 +12,9 @@ echo.
 echo  Pour arreter l'application : fermez cette fenetre.
 echo.
 
+
 cd /d "%~dp0"
 python -m streamlit run app.py --server.headless false --browser.gatherUsageStats false --server.port 8501
 
 pause
+
